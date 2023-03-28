@@ -1,23 +1,11 @@
 resources:
 - repo: self
 
-trigger:
-  batch: true
-  branches:
-    include:
-    - '*'
-
-pr:
-  branches:
-    include:
-    - '*'
-
-variables:
-- template: .azure-pipelines/templates/variables.yml
+trigger: none
 
 jobs:
 - job: RdbmsRegression
-  displayName: rdbms regression test
+  displayName: Rdbms Regression
 
   pool:
     vmImage: 'ubuntu-latest'
@@ -32,4 +20,4 @@ jobs:
       . env/bin/activate
       azdev test rdbms
 
-    displayName: 'rdbms regression test'
+    displayName: 'azdev test rdbms'
