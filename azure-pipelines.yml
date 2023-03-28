@@ -16,12 +16,11 @@ variables:
 - template: .azure-pipelines/templates/variables.yml
 
 jobs:
-- job: VerifyVersions
-  displayName: Verify Command Module Versions
-  condition: and(succeeded(), or(eq(variables['Build.SourceBranch'], 'refs/heads/release'), eq(variables['System.PullRequest.TargetBranch'], 'release')))
+- job: RdbmsRegression
+  displayName: rdbms regression test
 
   pool:
-    name: ${{ variables.ubuntu_pool }}
+    name: 'ubuntu-latest'
   steps:
   - task: UsePythonVersion@0
     displayName: 'Use Python 3.10'
@@ -31,6 +30,6 @@ jobs:
   - bash: |
       set -ev
       . env/bin/activate
-      azdev verify history
+      azdev test rdbms
 
-    displayName: 'Verify History'
+    displayName: 'rdbms regression test'
