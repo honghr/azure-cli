@@ -15,17 +15,6 @@ pr:
 variables:
 - template: .azure-pipelines/templates/variables.yml
 
-parameters:
-- name: architectures
-  type: object
-  default:
-  - name: AMD64
-    value: amd64
-    pool: pool-ubuntu-2004
-  - name: ARM64
-    value: arm64
-    pool: ubuntu-arm64-2004-pool
-
 jobs:
 - job: VerifyVersions
   displayName: Verify Command Module Versions
