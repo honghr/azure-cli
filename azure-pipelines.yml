@@ -20,7 +20,7 @@ jobs:
   displayName: rdbms regression test
 
   pool:
-    name: 'ubuntu-latest'
+    vmImage: 'ubuntu-latest'
   steps:
   - task: UsePythonVersion@0
     displayName: 'Use Python 3.10'
