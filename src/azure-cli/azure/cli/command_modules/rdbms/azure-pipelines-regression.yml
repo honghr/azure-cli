@@ -1,0 +1,23 @@
+resources:
+- repo: self
+
+trigger: none
+
+jobs:
+- job: RdbmsRegression
+  displayName: Rdbms Regression
+
+  pool:
+    vmImage: 'ubuntu-latest'
+  steps:
+  - task: UsePythonVersion@0
+    displayName: 'Use Python 3.10'
+    inputs:
+      versionSpec: 3.10
+  - template: .azure-pipelines/templates/azdev_setup.yml
+  - bash: |
+      set -ev
+      . env/bin/activate
+      azdev test --live -a --mysql-location=eastus2euap --mysql-paired-location=centraluseuap  rdbms
+
+    displayName: 'azdev test rdbms'

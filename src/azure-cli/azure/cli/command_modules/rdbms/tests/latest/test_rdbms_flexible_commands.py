@@ -40,6 +40,7 @@ from ...flexible_server_custom_mysql import DbContext as MysqlDbContext
 from ...flexible_server_custom_mysql import _determine_iops
 from ..._flexible_server_util import get_mysql_list_skus_info
 from ..._util import retryable_method
+from .conftest import mysql_location, mysql_paired_location
 # Constants
 SERVER_NAME_PREFIX = 'azuredbclitest-'
 SERVER_NAME_MAX_LENGTH = 20
@@ -79,7 +80,8 @@ class ServerPreparer(AbstractPreparer, SingleValueReplacer):
 class FlexibleServerMgmtScenarioTest(ScenarioTest):
 
     postgres_location = 'eastus'
-    mysql_location = 'northeurope'
+    mysql_location = mysql_location
+    mysql_paired_location = mysql_paired_location
 
     @AllowLargeResponse()
     @ResourceGroupPreparer(location=mysql_location)
@@ -134,7 +136,7 @@ class FlexibleServerMgmtScenarioTest(ScenarioTest):
     @AllowLargeResponse()
     @ResourceGroupPreparer(location=mysql_location)
     @KeyVaultPreparer(name_prefix='rdbmsvault', parameter_name='vault_name', location=mysql_location, additional_params='--enable-purge-protection true --retention-days 90')
-    @KeyVaultPreparer(name_prefix='rdbmsvault', parameter_name='backup_vault_name', location='westeurope', additional_params='--enable-purge-protection true --retention-days 90')
+    @KeyVaultPreparer(name_prefix='rdbmsvault', parameter_name='backup_vault_name', location=mysql_paired_location, additional_params='--enable-purge-protection true --retention-days 90')
     def test_mysql_flexible_server_byok_mgmt(self, resource_group, vault_name, backup_vault_name):
         self._test_flexible_server_byok_mgmt('mysql', resource_group, vault_name, backup_vault_name)
 
@@ -153,13 +155,11 @@ class FlexibleServerMgmtScenarioTest(ScenarioTest):
             version = '12'
             storage_size = 128
             location = self.postgres_location
-            location_result = 'East US'
             sku_name = 'Standard_D2s_v3'
         elif database_engine == 'mysql':
             storage_size = 32
             version = '5.7'
             location = self.mysql_location
-            location_result = 'North Europe'
             sku_name = 'Standard_D2ds_v4'
         tier = 'GeneralPurpose'
         backup_retention = 7
@@ -172,17 +172,15 @@ class FlexibleServerMgmtScenarioTest(ScenarioTest):
                   --zone 1 --public-access None'.format(database_engine,
                   resource_group, server_name, backup_retention, sku_name, tier, storage_size, 'dbadmin', version, database_name, ha_value))
 
-        list_checks = [JMESPathCheck('name', server_name),
-                        JMESPathCheck('location', location_result),  # location should be same as rg location
-                        JMESPathCheck('resourceGroup', resource_group),
-                        JMESPathCheck('sku.name', sku_name),
-                        JMESPathCheck('sku.tier', tier),
-                        JMESPathCheck('version', version),
-                        JMESPathCheck('storage.storageSizeGb', storage_size),
-                        JMESPathCheck('backup.backupRetentionDays', backup_retention)]
-
-        self.cmd('{} flexible-server show -g {} -n {}'
-                 .format(database_engine, resource_group, server_name), checks=list_checks)
+        basic_info = self.cmd('{} flexible-server show -g {} -n {}'.format(database_engine, resource_group, server_name)).get_output_in_json()
+        self.assertEqual(basic_info['name'], server_name)
+        self.assertEqual(str(basic_info['location']).replace(' ', '').lower(), location)
+        self.assertEqual(basic_info['resourceGroup'], resource_group)
+        self.assertEqual(basic_info['sku']['name'], sku_name)
+        self.assertEqual(basic_info['sku']['tier'], tier)
+        self.assertEqual(basic_info['version'], version)
+        self.assertEqual(basic_info['storage']['storageSizeGb'], storage_size)
+        self.assertEqual(basic_info['backup']['backupRetentionDays'], backup_retention)
 
         self.cmd('{} flexible-server db show -g {} -s {} -d {}'
                     .format(database_engine, resource_group, server_name, database_name), checks=[JMESPathCheck('name', database_name)])
@@ -255,7 +253,7 @@ class FlexibleServerMgmtScenarioTest(ScenarioTest):
         if self.cli_ctx.local_context.is_on:
             self.cmd('config param-persist off')
 
-        location = 'northeurope'
+        location = self.mysql_location
         list_skus_info = get_mysql_list_skus_info(self, location)
         iops_info = list_skus_info['iops_info']
 
@@ -322,7 +320,7 @@ class FlexibleServerMgmtScenarioTest(ScenarioTest):
 
     def _test_flexible_server_paid_iops_mgmt(self, database_engine, resource_group):
         
-        location = 'northeurope'
+        location = self.mysql_location
         server_name = self.create_random_name(SERVER_NAME_PREFIX, SERVER_NAME_MAX_LENGTH)
         server_name_2 = self.create_random_name(SERVER_NAME_PREFIX + '2', SERVER_NAME_MAX_LENGTH)
 
@@ -479,11 +477,9 @@ class FlexibleServerMgmtScenarioTest(ScenarioTest):
         if database_engine == 'postgres':
             location = self.postgres_location
             target_location = 'westus'
-            target_location_full_name = 'West US'
         elif database_engine == 'mysql':
             location = self.mysql_location
-            target_location = 'westeurope'
-            target_location_full_name = 'West Europe'
+            target_location = self.mysql_paired_location
 
         source_server = self.create_random_name(SERVER_NAME_PREFIX, SERVER_NAME_MAX_LENGTH)
         source_server_2 = self.create_random_name(SERVER_NAME_PREFIX, SERVER_NAME_MAX_LENGTH)
@@ -522,7 +518,7 @@ class FlexibleServerMgmtScenarioTest(ScenarioTest):
                                   .format(database_engine, resource_group, target_location, target_server_public_access, source_server)).get_output_in_json()
 
             self.assertEqual(restore_result['network']['publicNetworkAccess'], 'Enabled')
-            self.assertEqual(restore_result['location'], target_location_full_name)
+            self.assertEqual(str(restore_result['location']).replace(' ', '').lower(), target_location)
 
         # 3. vnet to different vnet
         self.cmd('network vnet create -g {} -l {} -n {} --address-prefixes 172.1.0.0/16'.format(
@@ -575,7 +571,7 @@ class FlexibleServerMgmtScenarioTest(ScenarioTest):
                                          ).get_output_in_json()
 
         self.assertEqual(restore_result['network']['publicNetworkAccess'], 'Enabled')
-        self.assertEqual(restore_result['location'], target_location_full_name)
+        self.assertEqual(str(restore_result['location']).replace(' ', '').lower(), target_location)
 
         # 6. take params tier, storage-size, sku-name, storage-auto-grow, backup-retention and geo-redundant-backup
         if database_engine == 'mysql':
@@ -610,7 +606,7 @@ class FlexibleServerMgmtScenarioTest(ScenarioTest):
             location = self.postgres_location
         elif database_engine == 'mysql':
             location = self.mysql_location
-            target_location = 'westeurope'
+            target_location = self.mysql_paired_location
 
         source_server = self.create_random_name(SERVER_NAME_PREFIX, SERVER_NAME_MAX_LENGTH)
         target_server = self.create_random_name(SERVER_NAME_PREFIX, SERVER_NAME_MAX_LENGTH)
@@ -658,14 +654,12 @@ class FlexibleServerMgmtScenarioTest(ScenarioTest):
         if database_engine == 'mysql':
             sku_name = 'Standard_D2ds_v4'
             location = self.mysql_location
-            backup_location = 'westeurope'
-            backup_location_full_name = 'West Europe'
+            backup_location = self.mysql_paired_location
             replication_role = 'Replica'
         elif database_engine == 'postgres':
             sku_name = 'Standard_D2s_v3'
             location = self.postgres_location
             backup_location = 'westus'
-            backup_location_full_name = 'West US'
             replication_role = 'AsyncReplica'
 
         key = self.cmd('keyvault key create --name {} -p software --vault-name {}'
@@ -917,14 +911,17 @@ class FlexibleServerMgmtScenarioTest(ScenarioTest):
             seconds_to_wait = (parser.isoparse(earliest_restore_time) - parser.isoparse(current_time)).total_seconds()
             sleep(max(0, seconds_to_wait))
 
-            self.cmd('{} flexible-server {} -g {} --name {} --source-server {} {}'.format(
+            restore_result = self.cmd('{} flexible-server {} -g {} --name {} --source-server {} {}'.format(
                      database_engine,
                      restore_type,
                      resource_group,
                      backup_name,
                      server_name,
                      F"--key {key['key']['kid']} --identity {identity['id']}" if database_engine == 'postgres' else ''
-            ), checks=main_checks + ([JMESPathCheck('location', backup_location_full_name)] if geo_redundant_backup else []))
+            ), checks=main_checks).get_output_in_json()
+
+            if geo_redundant_backup:
+                self.assertEqual(str(restore_result['location']).replace(' ', '').lower(), backup_location)
 
             if database_engine == 'mysql':
                 # disable data encryption in primary server
@@ -953,7 +950,7 @@ class FlexibleServerMgmtScenarioTest(ScenarioTest):
 class FlexibleServerProxyResourceMgmtScenarioTest(ScenarioTest):
 
     postgres_location = 'eastus'
-    mysql_location = 'northeurope'
+    mysql_location = mysql_location
 
     @AllowLargeResponse()
     @ResourceGroupPreparer(location=postgres_location)
@@ -1103,7 +1100,7 @@ class FlexibleServerProxyResourceMgmtScenarioTest(ScenarioTest):
 class FlexibleServerValidatorScenarioTest(ScenarioTest):
 
     postgres_location = 'eastus'
-    mysql_location = 'northeurope'
+    mysql_location = mysql_location
 
     @AllowLargeResponse()
     @ResourceGroupPreparer(location=postgres_location)
@@ -1270,7 +1267,8 @@ class FlexibleServerValidatorScenarioTest(ScenarioTest):
 class FlexibleServerReplicationMgmtScenarioTest(ScenarioTest):  # pylint: disable=too-few-public-methods
 
     postgres_location = 'eastus'
-    mysql_location = 'northeurope'
+    mysql_location = mysql_location
+    mysql_paired_location = mysql_paired_location
 
     @AllowLargeResponse()
     @ResourceGroupPreparer(location=postgres_location)
@@ -1290,8 +1288,8 @@ class FlexibleServerReplicationMgmtScenarioTest(ScenarioTest):  # pylint: disabl
     
     def _test_flexible_server_cross_region_replica_mgmt(self, database_engine, resource_group):
         # create a server
-        master_location = 'westeurope'
-        replica_location = 'northeurope'
+        master_location = self.mysql_paired_location
+        replica_location = self.mysql_location
         primary_role = 'None'
         replica_role = 'Replica'
         private_dns_param = 'privateDnsZoneResourceId' if database_engine == 'mysql' else 'privateDnsZoneArmResourceId'
@@ -1485,7 +1483,7 @@ class FlexibleServerReplicationMgmtScenarioTest(ScenarioTest):  # pylint: disabl
 class FlexibleServerVnetMgmtScenarioTest(ScenarioTest):
 
     postgres_location = 'eastus'
-    mysql_location = 'northeurope'
+    mysql_location = mysql_location
 
     @AllowLargeResponse()
     @ResourceGroupPreparer(location=postgres_location)
@@ -1936,7 +1934,7 @@ class FlexibleServerVnetMgmtScenarioTest(ScenarioTest):
 
 class FlexibleServerPrivateDnsZoneScenarioTest(ScenarioTest):
     postgres_location = 'eastus'
-    mysql_location = 'northeurope'
+    mysql_location = mysql_location
 
     @AllowLargeResponse()
     @ResourceGroupPreparer(location=postgres_location, parameter_name='server_resource_group')
@@ -2157,7 +2155,7 @@ class FlexibleServerPrivateDnsZoneScenarioTest(ScenarioTest):
 
 class FlexibleServerPublicAccessMgmtScenarioTest(ScenarioTest):
     postgres_location = 'eastus'
-    mysql_location = 'northeurope'
+    mysql_location = mysql_location
 
     @AllowLargeResponse()
     @ResourceGroupPreparer(location=postgres_location)
@@ -2240,7 +2238,7 @@ class FlexibleServerPublicAccessMgmtScenarioTest(ScenarioTest):
 
 class FlexibleServerUpgradeMgmtScenarioTest(ScenarioTest):
     postgres_location = 'eastus'
-    mysql_location = 'northeurope'
+    mysql_location = mysql_location
 
     @AllowLargeResponse()
     @ResourceGroupPreparer(location=mysql_location)
@@ -2322,7 +2320,7 @@ class FlexibleServerUpgradeMgmtScenarioTest(ScenarioTest):
 
 class FlexibleServerBackupsMgmtScenarioTest(ScenarioTest):
     postgres_location = 'eastus'
-    mysql_location = 'northeurope'
+    mysql_location = mysql_location
 
     @AllowLargeResponse()
     @ResourceGroupPreparer(location=postgres_location)
@@ -2373,7 +2371,7 @@ class FlexibleServerBackupsMgmtScenarioTest(ScenarioTest):
 
 
 class FlexibleServerIdentityAADAdminMgmtScenarioTest(ScenarioTest):
-    mysql_location = 'northeurope'
+    mysql_location = mysql_location
     postgres_location = 'eastus'
 
     @AllowLargeResponse()
