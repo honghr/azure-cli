@@ -18,6 +18,6 @@ jobs:
   - bash: |
       set -ev
       . env/bin/activate
-      azdev test --live -a --mysql-location=eastus2euap --mysql-paired-location=centraluseuap  rdbms
+      azdev test --live --no-exitfirst test_rdbms_flexible_commands --mark mysql_regression -a --mysql-location=eastus2euap --mysql-paired-location=centraluseuap --mysql-general-purpose-sku=Standard_D2s_v3 --mysql-memory-optimized-sku=Standard_E2s_v3
 
     displayName: 'azdev test rdbms'
