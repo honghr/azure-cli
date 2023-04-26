@@ -433,12 +433,12 @@ def get_user_confirmation(message, yes=False):
 
 
 def replace_memory_optimized_tier(result):
-    result = _get_list_from_paged_response(result)
-    for capability_idx, capability in enumerate(result):
-        for edition_idx, edition in enumerate(capability.supported_flexible_server_editions):
-            if edition.name == 'MemoryOptimized':
-                result[capability_idx].supported_flexible_server_editions[edition_idx].name = 'BusinessCritical'
+    supported_editions = _get_list_from_paged_response(result.supported_flexible_server_editions)
+    for edition_idx, edition in enumerate(supported_editions):
+        if edition.name == 'MemoryOptimized':
+            supported_editions[edition_idx].name = 'BusinessCritical'
 
+    result.supported_flexible_server_editions = supported_editions
     return result
 
 

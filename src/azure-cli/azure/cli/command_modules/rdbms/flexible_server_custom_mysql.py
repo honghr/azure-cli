@@ -778,7 +778,7 @@ def flexible_server_mysql_get(cmd, resource_group_name, server_name):
 
 
 def flexible_list_skus(cmd, client, location):
-    result = client.list(location)
+    result = client.get(location)
     result = replace_memory_optimized_tier(result)
     logger.warning('For prices please refer to https://aka.ms/mysql-pricing')
     return result

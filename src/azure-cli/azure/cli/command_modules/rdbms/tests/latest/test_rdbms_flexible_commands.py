@@ -1600,6 +1600,7 @@ class FlexibleServerVnetMgmtScenarioTest(ScenarioTest):
     def test_flexible_server_vnet_mgmt_validator(self, resource_group):
         self._test_flexible_server_vnet_mgmt_validator(resource_group)
   
+    @pytest.mark.mysql_regression
     @AllowLargeResponse()
     @ResourceGroupPreparer(location=mysql_location)
     def test_mysql_flexible_server_public_access_custom(self, resource_group):
