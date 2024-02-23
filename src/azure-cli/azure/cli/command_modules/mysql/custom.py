@@ -939,7 +939,7 @@ def flexible_server_update_custom_func(cmd, client, instance,
                                        replication_role=None,
                                        byok_identity=None, backup_byok_identity=None, byok_key=None, backup_byok_key=None,
                                        disable_data_encryption=False,
-                                       public_access=None):
+                                       public_access=None, detach_vnet=None):
     # validator
     location = ''.join(instance.location.lower().split())
     db_context = DbContext(
@@ -1064,6 +1064,10 @@ def flexible_server_update_custom_func(cmd, client, instance,
     if public_access:
         instance.network.public_network_access = public_access
 
+    if detach_vnet is True:
+        instance.network.delegated_subnet_resource_id = ""
+        instance.network.private_dns_zone_resource_id = ""
+
     params = ServerForUpdate(sku=instance.sku,
                              storage=instance.storage,
                              backup=instance.backup,
@@ -1073,6 +1077,11 @@ def flexible_server_update_custom_func(cmd, client, instance,
                              identity=identity,
                              data_encryption=data_encryption,
                              network=instance.network)
+
+    if detach_vnet is True and str(instance.network.public_network_access).lower() == 'disabled':
+        logger.warning("The server has been successfully detached from the Vnet. Since you have public access disabled, you need to create a private link now. For more information, please refer to the following resources: https://learn.microsoft.com/en-us/azure/mysql/flexible-server/how-to-networking-private-link-azure-cli#create-the-private-endpoint")
+    if detach_vnet is True and str(instance.network.public_network_access).lower() == 'enabled':
+        logger.warning("The server has been successfully detached from the Vnet. You have public access enabled, you can connect to the public endpoint. Alternatively, you can create a private link (Optional) now. For more information, please refer to the following resources: https://learn.microsoft.com/en-us/azure/mysql/flexible-server/how-to-networking-private-link-azure-cli#create-the-private-endpoint")
 
     return params
 
